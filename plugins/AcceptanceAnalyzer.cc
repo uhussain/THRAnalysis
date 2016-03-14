@@ -38,6 +38,7 @@
 #include "TTree.h"
 #include "CommonTools/UtilAlgos/interface/TFileService.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
+#include "SimDataFormats/PileupSummaryInfo/interface/PileupSummaryInfo.h"
 
 
 
@@ -68,11 +69,13 @@ class AcceptanceAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
       edm::EDGetTokenT<std::vector<reco::GenJet>> genHadronicTausToken_;
       edm::EDGetTokenT<std::vector<reco::GenJet>> genElectronicTausToken_;
       edm::EDGetTokenT<std::vector<reco::GenJet>> genMuonicTausToken_;
+      edm::EDGetTokenT<std::vector<PileupSummaryInfo>> puToken_;
       edm::EDGetTokenT<LHEEventProduct> lheToken_;
       TTree *tree;
       float genMass, ETauPass, MuTauPass, EMuPass, TauTauPass;
       float ETauD, MuTauD, EMuD, TauTauD;
       float threeLeptons, nLooseTaus, nLooseElec, nLooseMu;
+      float nTruePU;
 };
 
 //
@@ -90,6 +93,7 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
     genHadronicTausToken_(consumes<std::vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("hadronSrc"))),
     genElectronicTausToken_(consumes<std::vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("electronSrc"))),
     genMuonicTausToken_(consumes<std::vector<reco::GenJet>>(iConfig.getParameter<edm::InputTag>("muonSrc"))),
+    puToken_(consumes<std::vector<PileupSummaryInfo>>(iConfig.getParameter<edm::InputTag>("puSrc"))),
     lheToken_(consumes<LHEEventProduct>(iConfig.getParameter<edm::InputTag>("lheSrc")))
 {
    //now do what ever initialization is needed
@@ -110,6 +114,7 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("nLooseTaus",&nLooseTaus,"nLooseTaus/F");
    tree->Branch("nLooseElec",&nLooseElec,"nLooseElec/F");
    tree->Branch("nLooseMu",&nLooseMu,"nLooseMu/F");
+   tree->Branch("nTruePU",&nTruePU,"nTruePU/F");
 
 }
 
@@ -138,6 +143,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     iEvent.getByToken(genElectronicTausToken_, eTaus);
     edm::Handle<std::vector<reco::GenJet>> mTaus;   
     iEvent.getByToken(genMuonicTausToken_, mTaus);
+    edm::Handle<std::vector<PileupSummaryInfo>> puInfo;   
+    iEvent.getByToken(puToken_, puInfo);
     edm::Handle<LHEEventProduct> lheProd;   
     iEvent.getByToken(lheToken_, lheProd);
 
@@ -155,7 +162,15 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     nLooseTaus = 0;
     nLooseElec = 0;
     nLooseMu = 0;
+    nTruePU = -1.0;
 
+    // Get the number of true events
+    // This is used later for pile up reweighting
+    if (puInfo->size() > 0) {
+        //std::cout<<"pu size = "<<puInfo->size()<<std::endl;
+        //std::cout<<puInfo->at(1).getTrueNumInteractions()<<std::endl;
+        nTruePU = puInfo->at(1).getTrueNumInteractions();
+    }
 
     // Denominator section first, just check if there's the correct #
     // of the associated leptons

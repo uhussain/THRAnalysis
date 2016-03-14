@@ -231,9 +231,11 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     std::vector<TLorentzVector> invmass;
     for (uint32_t i = 0; i < lhe.ISTUP.size(); ++i) {
         if (lhe.ISTUP[i]) {
-            if (TMath::Abs( lhe.IDUP[i] ) == 21)
-                outgoing.push_back( TMath::Abs( lhe.IDUP[i] ) );
-            if (TMath::Abs( lhe.IDUP[i] ) == 11) {
+            int Id = TMath::Abs( lhe.IDUP[i] );
+            if (Id==21||Id==1||Id==2||Id==3||Id==4||Id==5)
+                outgoing.push_back( TMath::Abs( Id ));
+            int Id2 = TMath::Abs( lhe.IDUP[i] );
+            if (Id2==11||Id2==13||Id2==15) {
                 TLorentzVector l = TLorentzVector( lhe.PUP[i][0],
                                                    lhe.PUP[i][1],
                                                    lhe.PUP[i][2],

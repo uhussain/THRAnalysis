@@ -35,6 +35,8 @@ for chan in channels :
 
 
 for i,name in enumerate(mapperPass) :
+    chan = name.split(' ')[0]
+    #print chan
     cutsAndWeightAll = ''
     for cut in mapperAll[ name ] :
         cutsAndWeightAll += cut
@@ -52,8 +54,11 @@ for i,name in enumerate(mapperPass) :
     h1pInt = h1p.Integral()
 
 
-    print "key: %s,  cut all: %s    cut pass: %s" % (name, cutsAndWeightAll, cutsAndWeightPass)
-    print " ---  all:",h1aInt
-    print " --- pass:",h1pInt
-    print " --- pass/all: %f" % (h1pInt/h1aInt)
+    #print "key: %s,  cut all: %s    cut pass: %s" % (name, cutsAndWeightAll, cutsAndWeightPass)
+    # divide by 2 because the Ntuple is double written, could be fixed in addPUReweight.py
+    #print " ---  all:",h1aInt/2.
+    #print " --- pass:",h1pInt/2.
+    #print " --- pass/all: %f" % (h1pInt/(h1aInt*2))
+    print "key: %s" % name
+    print h1aInt/2.,h1pInt/2.,(h1pInt/h1aInt)
     

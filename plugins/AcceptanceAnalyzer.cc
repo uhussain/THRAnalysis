@@ -72,10 +72,12 @@ class AcceptanceAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
       edm::EDGetTokenT<std::vector<PileupSummaryInfo>> puToken_;
       edm::EDGetTokenT<LHEEventProduct> lheToken_;
       TTree *tree;
-      float genMass, ETauPass, MuTauPass, EMuPass, TauTauPass;
-      float ETauD, MuTauD, EMuD, TauTauD;
+      float genMass, ETauPass, MuTauPass, EMuPass, TauTauPass, MuMuPass;
+      float ETauD, MuTauD, EMuD, TauTauD, MuMuD;
       float threeLeptons, nLooseTaus, nLooseElec, nLooseMu;
       float nTruePU;
+      float run, lumi, event;
+      double eventD;
 };
 
 //
@@ -101,6 +103,10 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    edm::Service<TFileService> fs;
    TFileDirectory subDir = fs->mkdir( "events" );
    tree = subDir.make<TTree>("Ntuple","My Analyzer Ntuple");
+   tree->Branch("run",&run,"run/F");
+   tree->Branch("lumi",&lumi,"lumi/F");
+   tree->Branch("event",&event,"event/F");
+   tree->Branch("eventD",&eventD,"eventD/D");
    tree->Branch("genMass",&genMass,"genMass/F");
    tree->Branch("ETauPass",&ETauPass,"ETauPass/F");
    tree->Branch("ETauD",&ETauD,"ETauD/F");
@@ -110,6 +116,8 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("EMuD",&EMuD,"EMuD/F");
    tree->Branch("TauTauPass",&TauTauPass,"TauTauPass/F");
    tree->Branch("TauTauD",&TauTauD,"TauTauD/F");
+   tree->Branch("MuMuPass",&MuMuPass,"MuMuPass/F");
+   tree->Branch("MuMuD",&MuMuD,"MuMuD/F");
    tree->Branch("threeLeptons",&threeLeptons,"threeLeptons/F");
    tree->Branch("nLooseTaus",&nLooseTaus,"nLooseTaus/F");
    tree->Branch("nLooseElec",&nLooseElec,"nLooseElec/F");
@@ -148,21 +156,33 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     edm::Handle<LHEEventProduct> lheProd;   
     iEvent.getByToken(lheToken_, lheProd);
 
-
+    run = -1.0;
+    lumi = -1.0;
+    event = -1.0;
+    eventD = -1.0;
     genMass = -1.0;
     ETauPass = 0;
     MuTauPass = 0;
     EMuPass = 0;
     TauTauPass = 0;
+    MuMuPass = 0;
     ETauD = 0;
     MuTauD = 0;
     EMuD = 0;
     TauTauD = 0;
+    MuMuD = 0;
     threeLeptons = 0;
     nLooseTaus = 0;
     nLooseElec = 0;
     nLooseMu = 0;
     nTruePU = -1.0;
+
+    //std::cout << iEvent.eventAuxiliary().event() << std::endl;
+    run = iEvent.eventAuxiliary().run();
+    lumi = iEvent.eventAuxiliary().luminosityBlock();
+    event = iEvent.eventAuxiliary().event();
+    eventD = iEvent.eventAuxiliary().event();
+    //std::cout << event << " " << eventD << std::endl;
 
     // Get the number of true events
     // This is used later for pile up reweighting
@@ -180,6 +200,7 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
         if(mTaus->size() >= 1) MuTauD = 1;
     }
     if(eTaus->size() >= 1 && mTaus->size() >= 1) EMuD = 1;
+    if(mTaus->size() >= 2) MuMuD = 1;
     
     float nLeptons = 0;
     nLeptons += hTaus->size() + eTaus->size() + mTaus->size();
@@ -196,6 +217,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     size_t EMu_e = 0;
     size_t EMu_m = 0;
     size_t TauTau_t = 0;
+    size_t MuMu_m1 = 0;
+    size_t MuMu_m2 = 0;
 
     //const lhef::HEPEUP lhe = lheProd.product()->hepeup();
     //uint32_t nHTaus = hTaus->size();
@@ -223,6 +246,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     for (const reco::GenJet &mu : *mTaus) {
         if ( TMath::Abs(mu.eta()) < 2.4 && mu.pt() > 10 ) EMu_m += 1;
         if ( TMath::Abs(mu.eta()) < 2.1 && mu.pt() > 19 ) MuTau_m += 1;
+        if ( TMath::Abs(mu.eta()) < 2.4 && mu.pt() > 20 ) MuMu_m1 += 1; // # of mu passing "leading" cut
+        if ( TMath::Abs(mu.eta()) < 2.4 && mu.pt() < 20 && mu.pt() > 10 ) MuMu_m2 += 1; // # of mu passing only "trailing" cut
     }
     //}
     
@@ -231,6 +256,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     if (MuTau_m > 0 && MuTau_t > 0) MuTauPass = 1;
     if (EMu_e > 0 && EMu_m > 0) EMuPass = 1;
     if (TauTau_t > 1) TauTauPass = 1;
+    if (MuMu_m1 > 1) MuMuPass = 1;
+    if (MuMu_m1 > 0 && MuMu_m2 > 0) MuMuPass = 1;
     
 
     //std::cout << lheProd << std::endl;

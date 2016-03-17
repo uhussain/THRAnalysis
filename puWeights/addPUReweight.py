@@ -8,7 +8,7 @@ import math
 puDict = PUreweight()
 #print puDict
 
-f = ROOT.TFile('ttree.root','UPDATE')
+f = ROOT.TFile('../ttree.root','UPDATE')
 d = f.Get('demo/events')
 
 t = d.Get('Ntuple')
@@ -28,5 +28,6 @@ for i in range( t.GetEntries() ) :
 
 print "DONE!"
 
+d.cd()
 t.Write()
 f.Close()

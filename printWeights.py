@@ -6,7 +6,7 @@ ROOT.gROOT.SetBatch(True)
 
 f = ROOT.TFile('ttree.root','r')
 
-t = f.Get('Ntuple')
+t = f.Get('demo/events/Ntuple')
 
 '''
 w/o weights
@@ -19,7 +19,7 @@ fWindow = '*(genMass > 60 && genMass < 120)'
 puweight = '*(puweight)'
 
 
-channels = ['ETau', 'MuTau', 'EMu', 'TauTau']
+channels = ['ETau', 'MuTau', 'EMu', 'TauTau', 'MuMu']
 mapperAll = OrderedDict()
 mapperPass = OrderedDict()
 

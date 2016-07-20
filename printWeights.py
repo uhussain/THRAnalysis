@@ -19,7 +19,9 @@ fWindow = '*(genMass > 60 && genMass < 120)'
 puweight = '*(puweight)'
 
 
-channels = ['ETau', 'MuTau', 'EMu', 'TauTau', 'MuMu']
+#channels = ['ETau', 'MuTau', 'EMu', 'TauTau', 'MuMu']
+channels = ['TauTau', 'TauTau4030']
+
 mapperAll = OrderedDict()
 mapperPass = OrderedDict()
 
@@ -28,10 +30,13 @@ for chan in channels :
     mapperPass[ chan+' w/o weights f_out' ] = [ chan+'Pass', fWindow ]
     mapperPass[ chan+' w/ weights' ] = [ chan+'Pass', puweight ]
     mapperPass[ chan+' w/ weights f_out' ] = [ chan+'Pass', fWindow, puweight ]
-    mapperAll[ chan+' w/o weights' ] = [ chan+'D', ]
-    mapperAll[ chan+' w/o weights f_out' ] = [ chan+'D', fWindow ]
-    mapperAll[ chan+' w/ weights' ] = [ chan+'D', puweight ]
-    mapperAll[ chan+' w/ weights f_out' ] = [ chan+'D', fWindow, puweight ]
+    cutName = chan
+    if chan == 'TauTau4030' :
+        cutName = 'TauTau'
+    mapperAll[ chan+' w/o weights' ] = [ cutName+'D', ]
+    mapperAll[ chan+' w/o weights f_out' ] = [ cutName+'D', fWindow ]
+    mapperAll[ chan+' w/ weights' ] = [ cutName+'D', puweight ]
+    mapperAll[ chan+' w/ weights f_out' ] = [ cutName+'D', fWindow, puweight ]
 
 
 for i,name in enumerate(mapperPass) :
@@ -54,11 +59,6 @@ for i,name in enumerate(mapperPass) :
     h1pInt = h1p.Integral()
 
 
-    #print "key: %s,  cut all: %s    cut pass: %s" % (name, cutsAndWeightAll, cutsAndWeightPass)
-    # divide by 2 because the Ntuple is double written, could be fixed in addPUReweight.py
-    #print " ---  all:",h1aInt/2.
-    #print " --- pass:",h1pInt/2.
-    #print " --- pass/all: %f" % (h1pInt/(h1aInt*2))
     print "key: %s" % name
-    print h1aInt/2.,h1pInt/2.,(h1pInt/h1aInt)
+    print h1aInt,h1pInt,(h1pInt/h1aInt)
     

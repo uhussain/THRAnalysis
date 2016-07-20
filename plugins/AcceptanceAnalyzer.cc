@@ -72,11 +72,11 @@ class AcceptanceAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResources
       edm::EDGetTokenT<std::vector<PileupSummaryInfo>> puToken_;
       edm::EDGetTokenT<LHEEventProduct> lheToken_;
       TTree *tree;
-      float genMass, ETauPass, MuTauPass, EMuPass, TauTauPass, MuMuPass;
+      float genMass, ETauPass, MuTauPass, EMuPass, TauTauPass, TauTau4030Pass, MuMuPass;
       float ETauD, MuTauD, EMuD, TauTauD, MuMuD;
       float threeLeptons, nLooseTaus, nLooseElec, nLooseMu;
-      float nTruePU;
-      float run, lumi, event;
+      float nTruePU, tauPt1, tauPt2, tauPt3;
+      float run, lumi;
       double eventD;
 };
 
@@ -105,7 +105,6 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    tree = subDir.make<TTree>("Ntuple","My Analyzer Ntuple");
    tree->Branch("run",&run,"run/F");
    tree->Branch("lumi",&lumi,"lumi/F");
-   tree->Branch("event",&event,"event/F");
    tree->Branch("eventD",&eventD,"eventD/D");
    tree->Branch("genMass",&genMass,"genMass/F");
    tree->Branch("ETauPass",&ETauPass,"ETauPass/F");
@@ -115,6 +114,7 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("EMuPass",&EMuPass,"EMuPass/F");
    tree->Branch("EMuD",&EMuD,"EMuD/F");
    tree->Branch("TauTauPass",&TauTauPass,"TauTauPass/F");
+   tree->Branch("TauTau4030Pass",&TauTau4030Pass,"TauTau4030Pass/F");
    tree->Branch("TauTauD",&TauTauD,"TauTauD/F");
    tree->Branch("MuMuPass",&MuMuPass,"MuMuPass/F");
    tree->Branch("MuMuD",&MuMuD,"MuMuD/F");
@@ -123,6 +123,9 @@ AcceptanceAnalyzer::AcceptanceAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("nLooseElec",&nLooseElec,"nLooseElec/F");
    tree->Branch("nLooseMu",&nLooseMu,"nLooseMu/F");
    tree->Branch("nTruePU",&nTruePU,"nTruePU/F");
+   tree->Branch("tauPt1",&tauPt1,"tauPt1/F");
+   tree->Branch("tauPt2",&tauPt2,"tauPt2/F");
+   tree->Branch("tauPt3",&tauPt3,"tauPt3/F");
 
 }
 
@@ -158,13 +161,13 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
 
     run = -1.0;
     lumi = -1.0;
-    event = -1.0;
     eventD = -1.0;
     genMass = -1.0;
     ETauPass = 0;
     MuTauPass = 0;
     EMuPass = 0;
     TauTauPass = 0;
+    TauTau4030Pass = 0;
     MuMuPass = 0;
     ETauD = 0;
     MuTauD = 0;
@@ -176,13 +179,14 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     nLooseElec = 0;
     nLooseMu = 0;
     nTruePU = -1.0;
+    tauPt1 = -1.0;
+    tauPt2 = -1.0;
+    tauPt3 = -1.0;
 
     //std::cout << iEvent.eventAuxiliary().event() << std::endl;
     run = iEvent.eventAuxiliary().run();
     lumi = iEvent.eventAuxiliary().luminosityBlock();
-    event = iEvent.eventAuxiliary().event();
     eventD = iEvent.eventAuxiliary().event();
-    //std::cout << event << " " << eventD << std::endl;
 
     // Get the number of true events
     // This is used later for pile up reweighting
@@ -216,7 +220,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     size_t MuTau_t = 0;
     size_t EMu_e = 0;
     size_t EMu_m = 0;
-    size_t TauTau_t = 0;
+    size_t TauTau_t1 = 0;
+    size_t TauTau_t2 = 0;
     size_t MuMu_m1 = 0;
     size_t MuMu_m2 = 0;
 
@@ -225,12 +230,20 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     //if (hTaus->size() > 0)// std::cout << " --- N Hadronic Taus: "<<nHTaus<<std::endl;
     //{
     //const std::vector<reco::GenJet> nTaus_ = hTaus.product();
+    std::vector< float > pts;
     for (const reco::GenJet &tau : *hTaus) {
+        pts.push_back( tau.pt() );
         if ( TMath::Abs(tau.eta()) < 2.3 && tau.pt() > 20 ) {
             MuTau_t += 1;
             ETau_t += 1;}
-        if ( TMath::Abs(tau.eta()) < 2.1 && tau.pt() > 40 ) TauTau_t += 1;
+        if ( TMath::Abs(tau.eta()) < 2.1 && tau.pt() > 40 ) TauTau_t1 += 1;
+        if ( TMath::Abs(tau.eta()) < 2.1 && tau.pt() > 30 ) TauTau_t2 += 1;
     }
+
+    if ( pts.size() > 0 ) tauPt1 = pts.at(0);
+    if ( pts.size() > 1 ) tauPt2 = pts.at(1);
+    if ( pts.size() > 2 ) tauPt3 = pts.at(2);
+
     //}
     //uint32_t nETaus = eTaus->size();
     //if (nETaus > 0)// std::cout << " ### N Electronic Taus: "<<nETaus<<std::endl;
@@ -255,7 +268,8 @@ AcceptanceAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSe
     if (ETau_e > 0 && ETau_t > 0) ETauPass = 1;
     if (MuTau_m > 0 && MuTau_t > 0) MuTauPass = 1;
     if (EMu_e > 0 && EMu_m > 0) EMuPass = 1;
-    if (TauTau_t > 1) TauTauPass = 1;
+    if (TauTau_t1 > 1) TauTauPass = 1;
+    if (TauTau_t1 == 1 && TauTau_t2 > 0) TauTau4030Pass = 1;
     if (MuMu_m1 > 1) MuMuPass = 1;
     if (MuMu_m1 > 0 && MuMu_m2 > 0) MuMuPass = 1;
     

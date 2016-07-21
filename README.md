@@ -15,5 +15,7 @@ To operate:
 `python genEventInfo.py`
 5. copy over your selected final cut based analysis tree to the main directory here (AcceptanceAnalyzer)
 `cp .......root .`
-6. compare analysis selected events to the gen selected events
-`python recoEventInfo.py`
+6. compare analysis selected events to the gen selected events and dump results to output file
+`python recoEventInfo.py > dump.txt`
+7. print results of the above dump.  Not sure why I chose this route.
+`python finalResults.py`

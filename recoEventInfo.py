@@ -113,7 +113,8 @@ def printNonMatchPts( chan ) :
         evtInfo = (run, lumi, evt)
 
         if evtInfo in allPassingSet :
-            str1 = "AN_Pass_Cuts: GenMass %.2f  Weight %.3f  GenPt1 %.2f  GenPt2 %.2f  GenPt3 %.2f   AnPt1 %.2f  AnPt2 %.2f  %s" % (row.genMass, weightMap[evtInfo][0], row.tauPt1, row.tauPt2, row.tauPt3, weightMap[evtInfo][1], weightMap[evtInfo][2], weightMap[evtInfo][3] )
+            #str1 = "AN_Pass_Cuts: GenMass %.2f  Weight %.3f  GenPt1 %.2f  GenPt2 %.2f  GenPt3 %.2f   AnPt1 %.2f  AnPt2 %.2f  %s" % (row.genMass, weightMap[evtInfo][0], row.tauPt1, row.tauPt2, row.tauPt3, weightMap[evtInfo][1], weightMap[evtInfo][2], weightMap[evtInfo][3] )
+            str1 = "%.2f %.3f %.2f %.2f %.2f %.2f %.2f %s" % (row.genMass, weightMap[evtInfo][0], row.tauPt1, row.tauPt2, row.tauPt3, weightMap[evtInfo][1], weightMap[evtInfo][2], weightMap[evtInfo][3] )
             if row.genMass < 120 and row.genMass > 60 :
                 f_out += 1
                 #print "F_out", f_out
@@ -133,21 +134,14 @@ def printNonMatchPts( chan ) :
     print "\n\n NOT F_OUT_STRS"
     for stri in not_f_out_strs :
         print stri
-    print "\n\n NO MATCHES between An and Reco"
-    for evt in allPassingSet :
-        print evt
 
-    print "F_out: ",f_out,"    F_out Weight: ",f_outW
-    print "NOT F_out: ",not_f_out,"    NOT F_out Weight: ",not_f_outW
-            
-    print "TOTAL GEN ANALYSIS EVTS: ",numEvts
 
         
 
 
 if __name__ == '__main__' :
     
-    channels = ['tt4030',]#'em']
+    channels = ['tt',]#'em']
     
     for chan in channels :
         print chan

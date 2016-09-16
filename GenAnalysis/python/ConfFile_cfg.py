@@ -273,7 +273,7 @@ process.tauGenJetsSelectorMuons = cms.EDFilter("TauGenJetDecayModeSelector",
      filter = cms.bool(False)
 )
 
-process.load("Acceptance.AcceptanceAnalyzer.CfiFile_cfi")
+process.load("THRAnalysis.GenAnalysis.AcceptanceAnalyzer.CfiFile_cfi")
 
 process.TFileService = cms.Service("TFileService",
                                        fileName = cms.string('ttree.root')

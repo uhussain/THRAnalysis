@@ -51,8 +51,10 @@
 #include "DataFormats/PatCandidates/interface/MET.h"
 #include "DataFormats/Common/interface/TriggerResults.h"
 #include "FWCore/Common/interface/TriggerNames.h"
+#include "DataFormats/PatCandidates/interface/TriggerObjectStandAlone.h"
+#include "DataFormats/Math/interface/deltaR.h"
 
-#include <map>
+//#include <map>
 
 //
 // class declaration
@@ -90,23 +92,18 @@ class TagAndProbeAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResource
       edm::EDGetTokenT<std::vector<reco::Vertex>> vertexToken_;
       edm::EDGetTokenT<edm::TriggerResults> triggerToken1_;
       edm::EDGetTokenT<edm::TriggerResults> triggerToken2_;
+      edm::EDGetTokenT<pat::TriggerObjectStandAloneCollection> triggerObjectsToken_;
       // l1 extras
       //edm::EDGetTokenT<edm::TriggerResults> triggerToken_;
 
       TTree *tree;
       TH1D *nEvents;
-      //float run, lumi;
+      TH1D *cutFlow;
       double eventD;
-      float nTruePU;
-      float run, lumi, nvtx, nvtxCleaned, IsoMu20, IsoMu22, IsoMu24,
+      float run, lumi, nTruePU, nvtx, nvtxCleaned, IsoMu20, IsoMu22, IsoMu24,
         IsoMu27, IsoMu21MediumIsoTau32, TrigPass, mPt, mEta, mPhi,
-        tPt, tEta, tPhi, tMVAIsoLoose, tMVAIsoMedium, tMVAIsoTight,
-        tMVAIsoVTight, m_vis, mt, SS;
-      //std::map< std::string, float > varMap;
-      //std::string run_s = "run";
-      //std::string lumi_s = "lumi";
-      //varMap[run_s] = float(run);
-      //varMap[lumi_s] = float(lumi);
+        tPt, tEta, tPhi, tMVAIsoVLoose, tMVAIsoLoose, tMVAIsoMedium, 
+        tMVAIsoTight, tMVAIsoVTight, m_vis, transMass, SS;
 };
 
 //
@@ -133,20 +130,42 @@ TagAndProbeAnalyzer::TagAndProbeAnalyzer(const edm::ParameterSet& iConfig) :
     metToken_(consumes<std::vector<pat::MET>>(iConfig.getParameter<edm::InputTag>("metSrc"))),
     vertexToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("pvSrc"))),
     triggerToken1_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerSrc1"))),
-    triggerToken2_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerSrc2")))
+    triggerToken2_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerSrc2"))),
+    triggerObjectsToken_(consumes<pat::TriggerObjectStandAloneCollection>(iConfig.getParameter<edm::InputTag>("triggerObjectsSrc")))
 {
    //now do what ever initialization is needed
    //usesResource("TFileService");
    edm::Service<TFileService> fs;
    TFileDirectory subDir = fs->mkdir( "tagAndProbe" );
    nEvents = subDir.make<TH1D>("nEvents","nEvents",1,-0.5,0.5);
+   cutFlow = subDir.make<TH1D>("cutFlow","cutFlow",10,-0.5,9.5);
    tree = subDir.make<TTree>("Ntuple","My T-A-P Ntuple");
    tree->Branch("run",&run,"run/F");
    tree->Branch("lumi",&lumi,"lumi/F");
    tree->Branch("eventD",&eventD,"eventD/D");
-   //for (auto& pair : varMap ) {
-   //   tree->Branch( pair.first,&pair.second,pair.first+"/F");
-   //}
+   tree->Branch("nTruePU",&nTruePU,"nTruePU/F");
+   tree->Branch("nvtx",&nvtx,"nvtx/F");
+   tree->Branch("nvtxCleaned",&nvtxCleaned,"nvtxCleaned/F");
+   tree->Branch("IsoMu20",&IsoMu20,"IsoMu20/F");
+   tree->Branch("IsoMu22",&IsoMu22,"IsoMu22/F");
+   tree->Branch("IsoMu24",&IsoMu24,"IsoMu24/F");
+   tree->Branch("IsoMu27",&IsoMu27,"IsoMu27/F");
+   tree->Branch("IsoMu21MediumIsoTau32",&IsoMu21MediumIsoTau32,"IsoMu21MediumIsoTau32/F");
+   tree->Branch("TrigPass",&TrigPass,"TrigPass/F");
+   tree->Branch("mPt",&mPt,"mPt/F");
+   tree->Branch("mEta",&mEta,"mEta/F");
+   tree->Branch("mPhi",&mPhi,"mPhi/F");
+   tree->Branch("tPt",&tPt,"tPt/F");
+   tree->Branch("tEta",&tEta,"tEta/F");
+   tree->Branch("tPhi",&tPhi,"tPhi/F");
+   tree->Branch("tMVAIsoVLoose",&tMVAIsoVLoose,"tMVAIsoVLoose/F");
+   tree->Branch("tMVAIsoLoose",&tMVAIsoLoose,"tMVAIsoLoose/F");
+   tree->Branch("tMVAIsoMedium",&tMVAIsoMedium,"tMVAIsoMedium/F");
+   tree->Branch("tMVAIsoTight",&tMVAIsoTight,"tMVAIsoTight/F");
+   tree->Branch("tMVAIsoVTight",&tMVAIsoVTight,"tMVAIsoVTight/F");
+   tree->Branch("m_vis",&m_vis,"m_vis/F");
+   tree->Branch("transMass",&transMass,"transMass/F");
+   tree->Branch("SS",&SS,"SS/F");
 
 }
 
@@ -169,105 +188,251 @@ void
 TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
     using namespace edm;
+
+    // First thing, fill the nEvents
+    nEvents->Fill(0.);
+    cutFlow->Fill(0., 1.);
+
+    run = iEvent.eventAuxiliary().run();
+    lumi = iEvent.eventAuxiliary().luminosityBlock();
+    eventD = iEvent.eventAuxiliary().event();
+
+    edm::Handle<std::vector<reco::Vertex>> vertices;   
+    iEvent.getByToken(vertexToken_, vertices);
+    if (vertices->empty()) return; // skip the event if no PV found
+    const reco::Vertex &PV = vertices->front();
+    if (PV.ndof() < 4) return; // bad vertex
+    nvtx = vertices.product()->size();
+    for (const reco::Vertex &vertex : *vertices)
+        if (!vertex.isFake()) nvtxCleaned++;
+
+    // Get the number of true events
+    // This is used later for pile up reweighting
+    edm::Handle<std::vector<PileupSummaryInfo>> puInfo;   
+    iEvent.getByToken(puToken_, puInfo);
+    if (puInfo->size() > 0) {
+        nTruePU = puInfo->at(1).getTrueNumInteractions();
+    }
+
+    cutFlow->Fill(1., 1.); // Good vertex
+
+
+
+    edm::Handle<std::vector<pat::Muon>> muons;   
+    iEvent.getByToken(muonToken_, muons);
+    // Storage for the "best" muon
+    pat::Muon bestMuon;
+    int passingMuons = 0;
+
+    for (const pat::Muon &mu : *muons) {
+        if (mu.pt() < 20 || fabs(mu.eta()) > 2.1 || !mu.isMediumMuon()) continue;
+        float mIso = (mu.pfIsolationR04().sumChargedHadronPt
+            + TMath::Max(0., mu.pfIsolationR04().sumNeutralHadronEt
+            + mu.pfIsolationR04().sumPhotonEt
+            - 0.5*mu.pfIsolationR04().sumPUPt))
+            /mu.pt();
+        if (mIso > 0.1) continue;
+        passingMuons++;
+        bestMuon = mu;
+    }
+    // Require strictly 1 muon
+    if (passingMuons == 0) return;
+    cutFlow->Fill(2., 1.);
+    // Extra lepton veto (muons)
+    if (passingMuons > 1) return;
+    cutFlow->Fill(3., 1.);
+
+
+    edm::Handle<std::vector<pat::Electron>> electrons;   
+    iEvent.getByToken(electronToken_, electrons);
+    int passingElectrons = 0;
+    for (const pat::Electron &el : *electrons) {
+        if (el.pt() < 20 || fabs(el.eta()) > 2.1 || 
+            el.electronID("mvaEleID-Spring15-25ns-nonTrig-V1-wp90") < 0.5) continue;
+        float eIso = (el.pfIsolationVariables().sumChargedHadronPt + TMath::Max(
+            el.pfIsolationVariables().sumNeutralHadronEt +
+            el.pfIsolationVariables().sumPhotonEt -
+            0.5 * el.pfIsolationVariables().sumPUPt, 0.0)) / el.pt();
+        if (eIso > 0.1) continue;
+        passingElectrons++;
+    }
+    // Extra lepton veto (electrons)
+    if (passingElectrons > 0) return;
+    cutFlow->Fill(4., 1.);
+
+
+    edm::Handle<std::vector<pat::Tau>> taus;   
+    iEvent.getByToken(tauToken_, taus);
+    // Storage for the "best" muon
+    pat::Tau bestTau;
+    int passingTaus = 0;
+    for (const pat::Tau &tau : *taus) {
+        if (tau.pt() < 20 || fabs(tau.eta()) > 2.1 || tau.tauID("byVLooseIsolationMVArun2v1DBoldDMwLT") < 0.5
+            || tau.tauID("decayModeFinding") < 0.5 || tau.tauID("againstElectronLooseMVA6") < 0.5
+            || tau.tauID("againstMuonTight3") < 0.5) continue;
+        // No extra lepton vetoes rely on tau number
+        // so, if multiple taus, choose highest pt one.
+        // Do trigger matching later
+        if (passingTaus == 0) bestTau = tau;
+        else if (tau.pt() > bestTau.pt())
+            bestTau = tau;
+        passingTaus++;
+    }
+    // Tau study so...
+    if (passingTaus == 0) return;
+    cutFlow->Fill(5., 1.);
+
+
+    // Check for non-overlapping bjets
+    // using Medium CISV value of 0.8
+    edm::Handle<std::vector<pat::Jet>> jets;   
+    iEvent.getByToken(jetToken_, jets);
+    bool btagged = false;
+    for (const pat::Jet &j : *jets) {
+        if (j.pt() < 20 || fabs(j.eta()) > 2.4 || j.bDiscriminator("pfCombinedInclusiveSecondaryVertexV2BJetTags") < 0.8) continue;
+        if (deltaR(j, bestMuon) > 0.5) continue;
+        if (deltaR(j, bestTau) > 0.5) continue;
+        btagged = true;
+    }
+    if (btagged) return;
+    cutFlow->Fill(6., 1.);
+
+
+    // Save our best tau and muon variables
+    mPt = bestMuon.pt();
+    mEta = bestMuon.eta();
+    mPhi = bestMuon.phi();
+    tPt = bestTau.pt();
+    tEta = bestTau.eta();
+    tPhi = bestTau.phi();
+    tMVAIsoVLoose = bestTau.tauID("byVLooseIsolationMVArun2v1DBoldDMwLT");
+    tMVAIsoLoose = bestTau.tauID("byLooseIsolationMVArun2v1DBoldDMwLT");
+    tMVAIsoMedium = bestTau.tauID("byMediumIsolationMVArun2v1DBoldDMwLT");
+    tMVAIsoTight = bestTau.tauID("byTightIsolationMVArun2v1DBoldDMwLT");
+    tMVAIsoVTight = bestTau.tauID("byVTightIsolationMVArun2v1DBoldDMwLT");
+
+
+    // Get MET for transverse mass calculation 
+    edm::Handle<std::vector<pat::MET>> mets;   
+    iEvent.getByToken(metToken_, mets);
+    const pat::MET &met = mets->front();
+    transMass = TMath::Sqrt( 2. * bestMuon.pt() * met.pt() * (1. - TMath::Cos( bestMuon.phi() - met.phi())));
+
+
+    // Get Visible Mass
+    TLorentzVector l1 = TLorentzVector( 0., 0., 0., 0. );
+    l1.SetPtEtaPhiM( bestMuon.pt(), bestMuon.eta(),
+        bestMuon.phi(), bestMuon.mass() );
+    TLorentzVector l2 = TLorentzVector( 0., 0., 0., 0. );
+    l2.SetPtEtaPhiM( bestTau.pt(), bestTau.eta(),
+        bestTau.phi(), bestTau.mass() );
+    m_vis = (l1 + l2).M();
+
+
+    // Same sign comparison
+    if (bestMuon.charge() + bestTau.charge() == 0) SS = 0;
+    else SS = 1;
+
+
+    std::cout << "Run: " <<run<< "Evt: " <<eventD<< "Lumi: " <<lumi<<std::endl;
+    
+
+
+    // Check for overlapping Gen Taus
+    // Check for overlapping L1IsoExtras
+    // Check for overlapping HLT trigger objects
     edm::Handle<std::vector<reco::GenJet>> hTaus;   
     iEvent.getByToken(genHadronicTausToken_, hTaus);
     edm::Handle<std::vector<reco::GenJet>> eTaus;   
     iEvent.getByToken(genElectronicTausToken_, eTaus);
     edm::Handle<std::vector<reco::GenJet>> mTaus;   
     iEvent.getByToken(genMuonicTausToken_, mTaus);
-    edm::Handle<std::vector<PileupSummaryInfo>> puInfo;   
-    iEvent.getByToken(puToken_, puInfo);
     edm::Handle<edm::TriggerResults> trigger1;   
     iEvent.getByToken(triggerToken1_, trigger1);
     edm::Handle<edm::TriggerResults> trigger2;   
     iEvent.getByToken(triggerToken2_, trigger2);
+    edm::Handle<pat::TriggerObjectStandAloneCollection> triggerObjects;
+    iEvent.getByToken(triggerObjectsToken_, triggerObjects);
 
-    edm::Handle<std::vector<reco::Vertex>> vertices;   
-    iEvent.getByToken(vertexToken_, vertices);
-    if (vertices->empty()) return; // skip the event if no PV found
-    const reco::Vertex &PV = vertices->front();
+    IsoMu20 = 0.;
+    IsoMu22 = 0.;
+    IsoMu24 = 0.;
+    IsoMu27 = 0.;
+    IsoMu21MediumIsoTau32 = 0.;
+    TrigPass = 0.;
 
-
-    edm::Handle<std::vector<pat::Muon>> muons;   
-    iEvent.getByToken(muonToken_, muons);
-    for (const pat::Muon &mu : *muons) {
-        if (mu.pt() < 5 || !mu.isLooseMuon()) continue;
-        printf("muon with pt %4.1f, dz(PV) %+5.3f, POG loose id %d, tight id %d\n",
-                mu.pt(), mu.muonBestTrack()->dz(PV.position()), mu.isLooseMuon(), mu.isTightMuon(PV));
+    edm::Handle<edm::TriggerResults> triggerResults;
+    if (trigger1.isValid()) {
+        std::cout << "Trigger Objects   HLT is valid" << std::endl;
+        triggerResults = trigger1;
+    }
+    else if (trigger2.isValid()) {
+        std::cout << "Trigger Objects   HLT2 is valid" << std::endl;
+        triggerResults = trigger2;
     }
 
-
-    edm::Handle<std::vector<pat::Electron>> electrons;   
-    iEvent.getByToken(electronToken_, electrons);
-    for (const pat::Electron &el : *electrons) {
-        if (el.pt() < 5) continue;
-        printf("elec with pt %4.1f, supercluster eta %+5.3f, sigmaIetaIeta %.3f (%.3f with full5x5 shower shapes), pass conv veto %d\n",
-                    el.pt(), el.superCluster()->eta(), el.sigmaIetaIeta(), el.full5x5_sigmaIetaIeta(), el.passConversionVeto());
-    }
-
-
-    edm::Handle<std::vector<pat::Tau>> taus;   
-    iEvent.getByToken(tauToken_, taus);
-    for (const pat::Tau &tau : *taus) {
-        if (tau.pt() < 20) continue;
-        printf("tau  with pt %4.1f, dxy signif %.1f, ID(byMediumCombinedIsolationDeltaBetaCorr3Hits) %.1f, lead candidate pt %.1f, pdgId %d \n",
-                    tau.pt(), tau.dxy_Sig(), tau.tauID("byMediumCombinedIsolationDeltaBetaCorr3Hits"), tau.leadCand()->pt(), tau.leadCand()->pdgId());
-    }
-
-
-    edm::Handle<std::vector<pat::Jet>> jets;   
-    iEvent.getByToken(jetToken_, jets);
-    int ijet = 0;
-    for (const pat::Jet &j : *jets) {
-        if (j.pt() < 20) continue;
-        printf("jet  with pt %5.1f (raw pt %5.1f), eta %+4.2f, btag CSV %.3f, CISV %.3f, pileup mva disc %+.2f\n",
-            j.pt(), j.pt()*j.jecFactor("Uncorrected"), j.eta(), std::max(0.f,j.bDiscriminator("combinedSecondaryVertexBJetTags")), std::max(0.f,j.bDiscriminator("combinedInclusiveSecondaryVertexBJetTags")), j.userFloat("pileupJetId:fullDiscriminant"));
-        if ((++ijet) == 1) { // for the first jet, let's print the leading constituents
-            std::vector<reco::CandidatePtr> daus(j.daughterPtrVector());
-            std::sort(daus.begin(), daus.end(), [](const reco::CandidatePtr &p1, const reco::CandidatePtr &p2) { return p1->pt() > p2->pt(); }); // the joys of C++11
-            for (unsigned int i2 = 0, n = daus.size(); i2 < n && i2 <= 3; ++i2) {
-                const pat::PackedCandidate &cand = dynamic_cast<const pat::PackedCandidate &>(*daus[i2]);
-                printf("         constituent %3d: pt %6.2f, dz(pv) %+.3f, pdgId %+3d\n", i2,cand.pt(),cand.dz(PV.position()),cand.pdgId());
-            }
+    const edm::TriggerNames &names = iEvent.triggerNames(*triggerResults);
+    for (unsigned int i = 0, n = triggerResults->size(); i < n; ++i) {
+        //std::cout << names.triggerName(i) << std::endl;
+        if (names.triggerName(i).find("HLT_IsoMu20_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu20 = 1; TrigPass = 1;
+        }
+        if (names.triggerName(i).find("HLT_IsoMu22_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu22 = 1; TrigPass = 1;
+        }
+        if (names.triggerName(i).find("HLT_IsoMu24_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu24 = 1; TrigPass = 1;
+        }
+        if (names.triggerName(i).find("HLT_IsoMu27_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu27 = 1; TrigPass = 1;
+        }
+        if (names.triggerName(i).find("HLT_IsoMu21_eta2p1_MediumIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu21MediumIsoTau32 = 1; TrigPass = 1;
         }
     }
- 
-    edm::Handle<std::vector<pat::MET>> mets;   
-    iEvent.getByToken(metToken_, mets);
-    const pat::MET &met = mets->front();
-    printf("MET: pt %5.1f, phi %+4.2f, sumEt (%.1f). genMET %.1f. MET with JES up/down: %.1f/%.1f\n",
-        met.pt(), met.phi(), met.sumEt(),
-        met.genMET()->pt(),
-        met.shiftedPt(pat::MET::JetEnUp), met.shiftedPt(pat::MET::JetEnDown));
 
-    printf("\n");
+    if (TrigPass == 0) return;
+    cutFlow->Fill(7., 1.);
 
-    run = -1.0;
-    lumi = -1.0;
-    eventD = -1.0;
-   //for (auto& pair : varMap ) {
-   //   pair.second = -1.0;
-   //}
+    //std::cout << "\n === TRIGGER OBJECTS === " << std::endl;
+    //for (pat::TriggerObjectStandAlone obj : *triggerObjects) { // note: not "const &" since we want to call unpackPathNames
+    //    obj.unpackPathNames(names);
+    //    std::cout << "\tTrigger object:  pt " << obj.pt() << ", eta " << obj.eta() << ", phi " << obj.phi() << std::endl;
+    //    // Print trigger object collection and type
+    //    std::cout << "\t   Collection: " << obj.collection() << std::endl;
+    //    std::cout << "\t   Type IDs:   ";
+    //    for (unsigned h = 0; h < obj.filterIds().size(); ++h) std::cout << " " << obj.filterIds()[h] ;
+    //    std::cout << std::endl;
+    //    // Print associated trigger filters
+    //    std::cout << "\t   Filters:    ";
+    //    for (unsigned h = 0; h < obj.filterLabels().size(); ++h) std::cout << " " << obj.filterLabels()[h];
+    //    std::cout << std::endl;
+    //    std::vector<std::string> pathNamesAll  = obj.pathNames(false);
+    //    std::vector<std::string> pathNamesLast = obj.pathNames(true);
+    //    // Print all trigger paths, for each one record also if the object is associated to a 'l3' filter (always true for the
+    //    // definition used in the PAT trigger producer) and if it's associated to the last filter of a successfull path (which
+    //    // means that this object did cause this trigger to succeed; however, it doesn't work on some multi-object triggers)
+    //    std::cout << "\t   Paths (" << pathNamesAll.size()<<"/"<<pathNamesLast.size()<<"):    ";
+    //    for (unsigned h = 0, n = pathNamesAll.size(); h < n; ++h) {
+    //        bool isBoth = obj.hasPathName( pathNamesAll[h], true, true ); 
+    //        bool isL3   = obj.hasPathName( pathNamesAll[h], false, true ); 
+    //        bool isLF   = obj.hasPathName( pathNamesAll[h], true, false ); 
+    //        bool isNone = obj.hasPathName( pathNamesAll[h], false, false ); 
+    //        std::cout << "   " << pathNamesAll[h];
+    //        if (isBoth) std::cout << "(L,3)";
+    //        if (isL3 && !isBoth) std::cout << "(*,3)";
+    //        if (isLF && !isBoth) std::cout << "(L,*)";
+    //        if (isNone && !isBoth && !isL3 && !isLF) std::cout << "(*,*)";
+    //    }
+    //    std::cout << std::endl;
+    //}
+    std::cout << std::endl;
 
-    // First thing, fill the nEvents
-    nEvents->Fill(0.);
 
-    //std::cout << iEvent.eventAuxiliary().event() << std::endl;
-    run = iEvent.eventAuxiliary().run();
-    lumi = iEvent.eventAuxiliary().luminosityBlock();
-    //varMap["run"] = iEvent.eventAuxiliary().run();
-    //varMap["lumi"] = iEvent.eventAuxiliary().luminosityBlock();
-    eventD = iEvent.eventAuxiliary().event();
-    //std::cout << "Run: " <<varMap["run"]<< "Evt: " <<eventD<< "Lumi: " <<varMap["lumi"]<<std::endl;
-    std::cout << "Run: " <<run<< "Evt: " <<eventD<< "Lumi: " <<lumi<<std::endl;
 
-    // Get the number of true events
-    // This is used later for pile up reweighting
-    if (puInfo->size() > 0) {
-        //std::cout<<"pu size = "<<puInfo->size()<<std::endl;
-        //std::cout<<puInfo->at(1).getTrueNumInteractions()<<std::endl;
-        nTruePU = puInfo->at(1).getTrueNumInteractions();
-    }
+
+
+
 
     // Denominator section first, just check if there's the correct #
     // of the associated leptons

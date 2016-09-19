@@ -13,4 +13,5 @@ tagAndProbe = cms.EDAnalyzer('TagAndProbeAnalyzer',
     pvSrc = cms.InputTag('offlineSlimmedPrimaryVertices'),
     triggerSrc1 = cms.InputTag("TriggerResults","","HLT"),
     triggerSrc2 = cms.InputTag("TriggerResults","","HLT2"),
+    triggerObjectsSrc = cms.InputTag("selectedPatTrigger"),
 )

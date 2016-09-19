@@ -1,20 +1,31 @@
 import FWCore.ParameterSet.Config as cms
 
-process = cms.Process("Demo")
+process = cms.Process("TagAndProbe")
 
 process.load("FWCore.MessageService.MessageLogger_cfi")
 
-#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(500) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(5000) )
+#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.MessageLogger.cerr.FwkReport.reportEvery = cms.untracked.int32(1000)
 
 process.source = cms.Source("PoolSource",
-    # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-        #'file:/afs/cern.ch/work/t/truggles/Z_to_tautau/dyjets_76x.root'
         'root://eoscms//eos/cms/store/mc/RunIISpring16MiniAODv2/DYJetsToLL_M-50_TuneCUETP8M1_13TeV-madgraphMLM-pythia8/MINIAODSIM/PUSpring16RAWAODSIM_reHLT_80X_mcRun2_asymptotic_v14_ext1-v1/20000/00071E92-6F55-E611-B68C-0025905A6066.root',
     )
 )
+
+
+
+import HLTrigger.HLTfilters.triggerResultsFilter_cfi as hlt
+process.hltFilter = hlt.triggerResultsFilter.clone( 
+        hltResults = cms.InputTag( "TriggerResults","","HLT2"), 
+        triggerConditions = ( 'HLT_IsoMu20_v*', 'HLT_IsoMu22_v*',\
+            'HLT_IsoMu24_v*', 'HLT_IsoMu27_v*'),
+        l1tResults = '', 
+        throw = False 
+        )
+
+
 
 process.tauGenJets = cms.EDProducer(
     "TauGenJetProducer",
@@ -22,6 +33,8 @@ process.tauGenJets = cms.EDProducer(
     includeNeutrinos = cms.bool( False ),
     verbose = cms.untracked.bool( False )
     )
+
+
 
 process.tauGenJetsSelectorAllHadrons = cms.EDFilter("TauGenJetDecayModeSelector",
      src = cms.InputTag("tauGenJets"),
@@ -36,11 +49,15 @@ process.tauGenJetsSelectorAllHadrons = cms.EDFilter("TauGenJetDecayModeSelector"
      filter = cms.bool(False)
 )
 
+
+
 process.tauGenJetsSelectorElectrons = cms.EDFilter("TauGenJetDecayModeSelector",
      src = cms.InputTag("tauGenJets"),
      select = cms.vstring('electron'), 
      filter = cms.bool(False)
 )
+
+
 
 process.tauGenJetsSelectorMuons = cms.EDFilter("TauGenJetDecayModeSelector",
      src = cms.InputTag("tauGenJets"),
@@ -48,27 +65,31 @@ process.tauGenJetsSelectorMuons = cms.EDFilter("TauGenJetDecayModeSelector",
      filter = cms.bool(False)
 )
 
+
+
+
 process.load("THRAnalysis.TagAndProbe.CfiFile_cfi")
-#process.load("TagAndProbe.TagAndProbeAnalyzer.CfiFile_cfi")
+
+
+
 
 process.TFileService = cms.Service("TFileService",
                                        fileName = cms.string('ttree.root')
                                    )
 
 
-#process.out = cms.OutputModule("PoolOutputModule",
-#    fileName = cms.untracked.string('myOutputFile.root')
-#    ,outputCommands = cms.untracked.vstring('drop *',
-#      #"keep *_myProducerLabel_*_*",
-#      #"keep *_slimmedMuons_*_*",
-#      "keep *_*_*_Demo",
-#        )
-#)
 
-process.p = cms.Path(process.tauGenJets*
+process.p = cms.Path(
+            process.hltFilter*
+            process.tauGenJets*
             process.tauGenJetsSelectorAllHadrons*
             process.tauGenJetsSelectorElectrons*
             process.tauGenJetsSelectorMuons*
             process.tagAndProbe)
 
 #process.e = cms.EndPath(process.out)
+
+#print process.dumpPython()
+
+
+

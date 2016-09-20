@@ -49,11 +49,16 @@
 #include "DataFormats/PatCandidates/interface/Photon.h"
 #include "DataFormats/PatCandidates/interface/Jet.h"
 #include "DataFormats/PatCandidates/interface/MET.h"
+#include "DataFormats/Math/interface/deltaR.h"
+
+// Trigger stuff...
 #include "DataFormats/Common/interface/TriggerResults.h"
 #include "FWCore/Common/interface/TriggerNames.h"
 #include "DataFormats/PatCandidates/interface/TriggerObjectStandAlone.h"
-#include "DataFormats/Math/interface/deltaR.h"
+#include "DataFormats/L1Trigger/interface/BXVector.h"
+#include "DataFormats/L1Trigger/interface/Tau.h"
 
+#include <algorithm>
 //#include <map>
 
 //
@@ -93,6 +98,9 @@ class TagAndProbeAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResource
       edm::EDGetTokenT<edm::TriggerResults> triggerToken1_;
       edm::EDGetTokenT<edm::TriggerResults> triggerToken2_;
       edm::EDGetTokenT<pat::TriggerObjectStandAloneCollection> triggerObjectsToken_;
+      edm::EDGetTokenT<BXVector<l1t::Tau>> stage2TauToken1_;
+      edm::EDGetTokenT<BXVector<l1t::Tau>> stage2TauToken2_;
+      edm::EDGetTokenT<std::vector<reco::GenParticle>> genToken_;
       // l1 extras
       //edm::EDGetTokenT<edm::TriggerResults> triggerToken_;
 
@@ -103,7 +111,9 @@ class TagAndProbeAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResource
       float run, lumi, nTruePU, nvtx, nvtxCleaned, IsoMu20, IsoMu22, IsoMu24,
         IsoMu27, IsoMu21MediumIsoTau32, TrigPass, mPt, mEta, mPhi,
         tPt, tEta, tPhi, tMVAIsoVLoose, tMVAIsoLoose, tMVAIsoMedium, 
-        tMVAIsoTight, tMVAIsoVTight, m_vis, transMass, SS;
+        tMVAIsoTight, tMVAIsoVTight, m_vis, transMass, SS,
+        leptonDR, mTrigMatch, tTrigMatch, mL1Match, tL1Match,
+        t_gen_match;
 };
 
 //
@@ -131,7 +141,10 @@ TagAndProbeAnalyzer::TagAndProbeAnalyzer(const edm::ParameterSet& iConfig) :
     vertexToken_(consumes<std::vector<reco::Vertex>>(iConfig.getParameter<edm::InputTag>("pvSrc"))),
     triggerToken1_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerSrc1"))),
     triggerToken2_(consumes<edm::TriggerResults>(iConfig.getParameter<edm::InputTag>("triggerSrc2"))),
-    triggerObjectsToken_(consumes<pat::TriggerObjectStandAloneCollection>(iConfig.getParameter<edm::InputTag>("triggerObjectsSrc")))
+    triggerObjectsToken_(consumes<pat::TriggerObjectStandAloneCollection>(iConfig.getParameter<edm::InputTag>("triggerObjectsSrc"))),
+    stage2TauToken1_(consumes<BXVector<l1t::Tau>>(iConfig.getParameter<edm::InputTag>("stage2TauSrc1"))),
+    stage2TauToken2_(consumes<BXVector<l1t::Tau>>(iConfig.getParameter<edm::InputTag>("stage2TauSrc2"))),
+    genToken_(consumes<std::vector<reco::GenParticle>>(iConfig.getParameter<edm::InputTag>("genSrc")))
 {
    //now do what ever initialization is needed
    //usesResource("TFileService");
@@ -155,14 +168,20 @@ TagAndProbeAnalyzer::TagAndProbeAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("mPt",&mPt,"mPt/F");
    tree->Branch("mEta",&mEta,"mEta/F");
    tree->Branch("mPhi",&mPhi,"mPhi/F");
+   tree->Branch("mTrigMatch",&mTrigMatch,"mTrigMatch/F");
+   tree->Branch("mL1Match",&mL1Match,"mL1Match/F");
    tree->Branch("tPt",&tPt,"tPt/F");
    tree->Branch("tEta",&tEta,"tEta/F");
    tree->Branch("tPhi",&tPhi,"tPhi/F");
+   tree->Branch("t_gen_match",&t_gen_match,"t_gen_match/F");
    tree->Branch("tMVAIsoVLoose",&tMVAIsoVLoose,"tMVAIsoVLoose/F");
    tree->Branch("tMVAIsoLoose",&tMVAIsoLoose,"tMVAIsoLoose/F");
    tree->Branch("tMVAIsoMedium",&tMVAIsoMedium,"tMVAIsoMedium/F");
    tree->Branch("tMVAIsoTight",&tMVAIsoTight,"tMVAIsoTight/F");
    tree->Branch("tMVAIsoVTight",&tMVAIsoVTight,"tMVAIsoVTight/F");
+   tree->Branch("tTrigMatch",&tTrigMatch,"tTrigMatch/F");
+   tree->Branch("tL1Match",&tL1Match,"tL1Match/F");
+   tree->Branch("leptonDR",&leptonDR,"leptonDR/F");
    tree->Branch("m_vis",&m_vis,"m_vis/F");
    tree->Branch("transMass",&transMass,"transMass/F");
    tree->Branch("SS",&SS,"SS/F");
@@ -193,10 +212,6 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     nEvents->Fill(0.);
     cutFlow->Fill(0., 1.);
 
-    run = iEvent.eventAuxiliary().run();
-    lumi = iEvent.eventAuxiliary().luminosityBlock();
-    eventD = iEvent.eventAuxiliary().event();
-
     edm::Handle<std::vector<reco::Vertex>> vertices;   
     iEvent.getByToken(vertexToken_, vertices);
     if (vertices->empty()) return; // skip the event if no PV found
@@ -204,21 +219,23 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     if (PV.ndof() < 4) return; // bad vertex
     nvtx = vertices.product()->size();
     for (const reco::Vertex &vertex : *vertices)
-        if (!vertex.isFake()) nvtxCleaned++;
+        if (!vertex.isFake()) ++nvtxCleaned;
 
     // Get the number of true events
     // This is used later for pile up reweighting
     edm::Handle<std::vector<PileupSummaryInfo>> puInfo;   
     iEvent.getByToken(puToken_, puInfo);
-    if (puInfo->size() > 0) {
-        nTruePU = puInfo->at(1).getTrueNumInteractions();
+    if (puInfo.isValid()) {
+        if (puInfo->size() > 0) {
+            nTruePU = puInfo->at(1).getTrueNumInteractions();
+        }
     }
 
     cutFlow->Fill(1., 1.); // Good vertex
 
 
 
-    edm::Handle<std::vector<pat::Muon>> muons;   
+    edm::Handle<std::vector<pat::Muon>> muons; 
     iEvent.getByToken(muonToken_, muons);
     // Storage for the "best" muon
     pat::Muon bestMuon;
@@ -276,7 +293,7 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
         if (passingTaus == 0) bestTau = tau;
         else if (tau.pt() > bestTau.pt())
             bestTau = tau;
-        passingTaus++;
+        ++passingTaus;
     }
     // Tau study so...
     if (passingTaus == 0) return;
@@ -310,6 +327,7 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     tMVAIsoMedium = bestTau.tauID("byMediumIsolationMVArun2v1DBoldDMwLT");
     tMVAIsoTight = bestTau.tauID("byTightIsolationMVArun2v1DBoldDMwLT");
     tMVAIsoVTight = bestTau.tauID("byVTightIsolationMVArun2v1DBoldDMwLT");
+    leptonDR = deltaR( bestMuon, bestTau );
 
 
     // Get MET for transverse mass calculation 
@@ -334,19 +352,15 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     else SS = 1;
 
 
-    std::cout << "Run: " <<run<< "Evt: " <<eventD<< "Lumi: " <<lumi<<std::endl;
+    eventD = iEvent.eventAuxiliary().event();
+    lumi = iEvent.eventAuxiliary().luminosityBlock();
+    run = iEvent.eventAuxiliary().run();
+
+    //std::cout << "Run: " <<run<< "  Evt: " <<eventD<< "  Lumi: " <<lumi<<std::endl;
+    printf("Run: %.0f    Evt: %.0f   Lumi: %.0f\n", run, eventD, lumi);
     
 
 
-    // Check for overlapping Gen Taus
-    // Check for overlapping L1IsoExtras
-    // Check for overlapping HLT trigger objects
-    edm::Handle<std::vector<reco::GenJet>> hTaus;   
-    iEvent.getByToken(genHadronicTausToken_, hTaus);
-    edm::Handle<std::vector<reco::GenJet>> eTaus;   
-    iEvent.getByToken(genElectronicTausToken_, eTaus);
-    edm::Handle<std::vector<reco::GenJet>> mTaus;   
-    iEvent.getByToken(genMuonicTausToken_, mTaus);
     edm::Handle<edm::TriggerResults> trigger1;   
     iEvent.getByToken(triggerToken1_, trigger1);
     edm::Handle<edm::TriggerResults> trigger2;   
@@ -363,74 +377,175 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
 
     edm::Handle<edm::TriggerResults> triggerResults;
     if (trigger1.isValid()) {
-        std::cout << "Trigger Objects   HLT is valid" << std::endl;
+        //std::cout << "Trigger Objects   HLT is valid" << std::endl;
         triggerResults = trigger1;
     }
     else if (trigger2.isValid()) {
-        std::cout << "Trigger Objects   HLT2 is valid" << std::endl;
+        //std::cout << "Trigger Objects   HLT2 is valid" << std::endl;
         triggerResults = trigger2;
     }
 
+    std::vector<std::string> usedPaths;
     const edm::TriggerNames &names = iEvent.triggerNames(*triggerResults);
+    // See https://twiki.cern.ch/twiki/bin/view/CMSPublic/WorkBookMiniAOD2014#Trigger
     for (unsigned int i = 0, n = triggerResults->size(); i < n; ++i) {
         //std::cout << names.triggerName(i) << std::endl;
         if (names.triggerName(i).find("HLT_IsoMu20_v") != std::string::npos) {
-            if (triggerResults->accept(i)) IsoMu20 = 1; TrigPass = 1;
+            if (triggerResults->accept(i)) IsoMu20 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
         if (names.triggerName(i).find("HLT_IsoMu22_v") != std::string::npos) {
-            if (triggerResults->accept(i)) IsoMu22 = 1; TrigPass = 1;
+            if (triggerResults->accept(i)) IsoMu22 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
         if (names.triggerName(i).find("HLT_IsoMu24_v") != std::string::npos) {
-            if (triggerResults->accept(i)) IsoMu24 = 1; TrigPass = 1;
+            if (triggerResults->accept(i)) IsoMu24 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
         if (names.triggerName(i).find("HLT_IsoMu27_v") != std::string::npos) {
-            if (triggerResults->accept(i)) IsoMu27 = 1; TrigPass = 1;
+            if (triggerResults->accept(i)) IsoMu27 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
         if (names.triggerName(i).find("HLT_IsoMu21_eta2p1_MediumIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) {
-            if (triggerResults->accept(i)) IsoMu21MediumIsoTau32 = 1; TrigPass = 1;
+            if (triggerResults->accept(i)) IsoMu21MediumIsoTau32 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
     }
 
-    if (TrigPass == 0) return;
-    cutFlow->Fill(7., 1.);
-
-    //std::cout << "\n === TRIGGER OBJECTS === " << std::endl;
-    //for (pat::TriggerObjectStandAlone obj : *triggerObjects) { // note: not "const &" since we want to call unpackPathNames
-    //    obj.unpackPathNames(names);
-    //    std::cout << "\tTrigger object:  pt " << obj.pt() << ", eta " << obj.eta() << ", phi " << obj.phi() << std::endl;
-    //    // Print trigger object collection and type
-    //    std::cout << "\t   Collection: " << obj.collection() << std::endl;
-    //    std::cout << "\t   Type IDs:   ";
-    //    for (unsigned h = 0; h < obj.filterIds().size(); ++h) std::cout << " " << obj.filterIds()[h] ;
-    //    std::cout << std::endl;
-    //    // Print associated trigger filters
-    //    std::cout << "\t   Filters:    ";
-    //    for (unsigned h = 0; h < obj.filterLabels().size(); ++h) std::cout << " " << obj.filterLabels()[h];
-    //    std::cout << std::endl;
-    //    std::vector<std::string> pathNamesAll  = obj.pathNames(false);
-    //    std::vector<std::string> pathNamesLast = obj.pathNames(true);
-    //    // Print all trigger paths, for each one record also if the object is associated to a 'l3' filter (always true for the
-    //    // definition used in the PAT trigger producer) and if it's associated to the last filter of a successfull path (which
-    //    // means that this object did cause this trigger to succeed; however, it doesn't work on some multi-object triggers)
-    //    std::cout << "\t   Paths (" << pathNamesAll.size()<<"/"<<pathNamesLast.size()<<"):    ";
-    //    for (unsigned h = 0, n = pathNamesAll.size(); h < n; ++h) {
-    //        bool isBoth = obj.hasPathName( pathNamesAll[h], true, true ); 
-    //        bool isL3   = obj.hasPathName( pathNamesAll[h], false, true ); 
-    //        bool isLF   = obj.hasPathName( pathNamesAll[h], true, false ); 
-    //        bool isNone = obj.hasPathName( pathNamesAll[h], false, false ); 
-    //        std::cout << "   " << pathNamesAll[h];
-    //        if (isBoth) std::cout << "(L,3)";
-    //        if (isL3 && !isBoth) std::cout << "(*,3)";
-    //        if (isLF && !isBoth) std::cout << "(L,*)";
-    //        if (isNone && !isBoth && !isL3 && !isLF) std::cout << "(*,*)";
-    //    }
-    //    std::cout << std::endl;
-    //}
-    std::cout << std::endl;
 
 
+    // Do trigger object matching
+    // for the moment, just record the number
+    // of times our 'best' objects match
+    // this can be expanded later to indivual trigs if necessary
+    mTrigMatch = 0;
+    tTrigMatch = 0;
+    for (pat::TriggerObjectStandAlone obj : *triggerObjects) { // note: not "const &" since we want to call unpackPathNames
+        obj.unpackPathNames(names);
+        std::vector<std::string> pathNamesLast = obj.pathNames(true);
+        // pathNamesLast = vector of flags, if this object was used in the final 
+        // filter of a succeeding HLT path resp. in a succeeding 
+        // condition of a succeeding L1 algorithm
+        for (unsigned h = 0, n = pathNamesLast.size(); h < n; ++h) {
+            if (std::find( usedPaths.begin(), usedPaths.end(), pathNamesLast[h]) != usedPaths.end()) {
+                //std::cout << " ---  " << pathNamesLast[h] << std::endl;
+                //std::cout << "\tTrigger object:  pt " << obj.pt() << ", eta " << obj.eta() << ", phi " << obj.phi() << std::endl;
+                float drMu = deltaR( bestMuon, obj );
+                float drTau = deltaR( bestTau, obj );
+                //std::cout << "\tbestMuon dR: " << drMu << std::endl;
+                //std::cout << "\tbestTau dR: " << drTau << std::endl;
+                if (drMu < 0.5) ++mTrigMatch;
+                if (drTau < 0.5) ++tTrigMatch;
+            }
+        }
+    }
 
 
+    // Do l1extra object matching
+    // Make sure to only consider l1 objects from the
+    // intended BX.  That is the size(0) and
+    // at(0,i) notation
+    edm::Handle<BXVector<l1t::Tau>> l1Taus1; 
+    iEvent.getByToken(stage2TauToken1_, l1Taus1);
+    edm::Handle<BXVector<l1t::Tau>> l1Taus2; 
+    iEvent.getByToken(stage2TauToken2_, l1Taus2);
+
+    edm::Handle<BXVector<l1t::Tau>> l1Taus; 
+    if (l1Taus1.isValid()) {
+        //std::cout << "Trigger Objects   HLT is valid" << std::endl;
+        l1Taus = l1Taus1;
+    }
+    else if (l1Taus2.isValid()) {
+        //std::cout << "Trigger Objects   HLT2 is valid" << std::endl;
+        l1Taus = l1Taus2;
+    }
+    
+    tL1Match = 0;
+    if (l1Taus.isValid()) {
+        std::cout << "L1 Extras is valid" << std::endl;
+        for (size_t i = 0; i < l1Taus->size(0); ++i) {
+            const l1t::Tau &l1Tau = l1Taus->at(0,i);
+            // skip l1Tau if it's low pt b/c the trigger we want
+            // actual results for is seeded by
+            // L1_DoubleIsoTau28
+            if (l1Tau.hwIso()<1 || l1Tau.pt()<27.5) continue; // hardware Iso bit
+            float drTau = deltaR( bestTau, l1Tau );
+            //std::cout << " - " << i << " L1Tau pt: " << l1Tau.pt() 
+            //<< " Iso: " << l1Tau.hwIso() << " dr: " << drTau << std::endl;
+            if (drTau < 0.5) ++tL1Match;
+        }    
+    } // end l1Taus
+
+
+
+    // Check for overlapping Gen Taus
+    // with reconstructed gen taus of 3 types
+    // and normal gen particles
+    edm::Handle<std::vector<reco::GenJet>> genHTaus;   
+    iEvent.getByToken(genHadronicTausToken_, genHTaus);
+    edm::Handle<std::vector<reco::GenJet>> genETaus;   
+    iEvent.getByToken(genElectronicTausToken_, genETaus);
+    edm::Handle<std::vector<reco::GenJet>> genMTaus;   
+    iEvent.getByToken(genMuonicTausToken_, genMTaus);
+    edm::Handle<std::vector<reco::GenParticle>> genParticles; 
+    iEvent.getByToken(genToken_, genParticles);
+    t_gen_match = -1;
+    if (genParticles.isValid()) {
+        // Find the closest gen particle to our candidate
+        if ( genParticles->size() > 0 ) {
+            reco::GenParticle closest = genParticles->at(0);
+            float closestDR = 999;
+            // The first two codes are based off of matching to true electrons/muons
+            // Find the closest gen particle...
+            for(size_t m = 0; m != genParticles->size(); ++m) {
+                reco::GenParticle genp = genParticles->at(m);
+                float tmpDR = deltaR( bestTau.p4(), genp.p4() );
+                if ( tmpDR < closestDR ) { closest = genp; closestDR = tmpDR; }
+            }
+            float genID = abs(closest.pdgId());
+
+            // Loop over all versions of gen taus and find closest one
+            float closestDR_HTau = 999;
+            float closestDR_ETau = 999;
+            float closestDR_MTau = 999;
+            if ( genHTaus->size() > 0 ) {
+                for (size_t j = 0; j != genHTaus->size(); ++j) {
+                    float tmpDR = deltaR( bestTau.p4(), genHTaus->at(j).p4() );
+                    if (tmpDR < closestDR_HTau) closestDR_HTau = tmpDR;
+                }
+            }
+            if ( genETaus->size() > 0 ) {
+                for (size_t j = 0; j != genETaus->size(); ++j) {
+                    float tmpDR = deltaR( bestTau.p4(), genETaus->at(j).p4() );
+                    if (tmpDR < closestDR_ETau) closestDR_ETau = tmpDR;
+                }
+            }
+            if ( genMTaus->size() > 0 ) {
+                for (size_t j = 0; j != genMTaus->size(); ++j) {
+                    float tmpDR = deltaR( bestTau.p4(), genMTaus->at(j).p4() );
+                    if (tmpDR < closestDR_MTau) closestDR_MTau = tmpDR;
+                }
+            }
+
+            // Now return the value based on which object is closer, the closest
+            // single gen particle, or the rebuild gen taus
+            // The first two codes are based off of matching to true electrons/muons
+            float closestGetTau = TMath::Min(closestDR_ETau, closestDR_MTau);
+            if (closestDR_HTau < closestGetTau) closestGetTau = closestDR_HTau;
+
+            // Make sure we don't overwrite a proper value
+            if (closestDR < closestGetTau && genID == 11 && closest.pt() > 8
+                    && closest.statusFlags().isPrompt() && closestDR < 0.2 )
+                        t_gen_match = 1.0;
+            else if (closestDR < closestGetTau && genID == 13 && closest.pt() > 8
+                    && closest.statusFlags().isPrompt() && closestDR < 0.2 )
+                        t_gen_match = 2.0;
+            // Other codes based off of not matching previous 2 options
+            // as closest gen particle, retruns based on closest rebuilt gen tau
+            else if (closestDR_ETau < 0.2 && closestDR_ETau < TMath::Min(closestDR_MTau, 
+                    closestDR_HTau)) t_gen_match = 3.0;
+            else if (closestDR_MTau < 0.2 && closestDR_MTau < TMath::Min(closestDR_ETau, 
+                    closestDR_HTau)) t_gen_match = 4.0;
+            else if (closestDR_HTau < 0.2 && closestDR_HTau < TMath::Min(closestDR_ETau, 
+                    closestDR_MTau)) t_gen_match = 5.0;
+            else t_gen_match = 6.0; // No match, return 6 for "fake tau"
+        }
+    }
 
 
 

@@ -14,4 +14,8 @@ tagAndProbe = cms.EDAnalyzer('TagAndProbeAnalyzer',
     triggerSrc1 = cms.InputTag("TriggerResults","","HLT"),
     triggerSrc2 = cms.InputTag("TriggerResults","","HLT2"),
     triggerObjectsSrc = cms.InputTag("selectedPatTrigger"),
+    stage2TauSrc1 = cms.InputTag("caloStage2Digis","Tau","RECO"),
+    stage2TauSrc2 = cms.InputTag("caloStage2Digis","Tau","HLT2"),
+    #stage2MuonSrc = cms.InputTag("gmtStage2Digis","Muon","RECO"),
+    genSrc = cms.InputTag("prunedGenParticles","","PAT"),
 )

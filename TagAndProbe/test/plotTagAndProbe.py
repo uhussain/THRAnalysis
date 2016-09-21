@@ -136,9 +136,9 @@ if __name__ == '__main__' :
 
             cuts = {
                 'SSPass'+run: '(SS == 1 && IsoMu21MediumIsoTau32 == 1\
-                    && tTrigMatch>0.5 && tL1Match>-0.5)',
+                    && tTrigMatch>0.5 && tL1Match>0.5)',
                 'OSPass'+run: '(SS == 0 && IsoMu21MediumIsoTau32 == 1\
-                    && tTrigMatch>0.5 && tL1Match>-0.5)',
+                    && tTrigMatch>0.5 && tL1Match>0.5)',
                 #'SSFail'+run: '(SS == 1 && IsoMu21MediumIsoTau32 == 0)',
                 #'OSFail'+run: '(SS == 0 && IsoMu21MediumIsoTau32 == 0)',
                 'SSAll'+run: '(SS == 1)',

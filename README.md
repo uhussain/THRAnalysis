@@ -1,5 +1,10 @@
 # Tau Tag and Probe
-Coming soon...
+Get previous HLT_doubleTau35 work
+
+```
+cd TagAndProbe
+source setup.sh
+```
 
 
 # GenTauAnalysis

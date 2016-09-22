@@ -1,6 +1,6 @@
 import ROOT
 from ROOT import gROOT
-#import pyplotter.tdrstyle as tdr
+import pyplotter.tdrstyle as tdr
 from array import array
 from crystalBall import CBeff
 from array import array
@@ -9,9 +9,25 @@ import math
 
 
 ROOT.gROOT.SetBatch(True)
-#tdr.setTDRStyle()
+tdr.setTDRStyle()
 DATE='Sept20'
 
+def buildLegend( items, names ) :
+    legend = ROOT.TLegend(0.45, 0.75, 0.95, 0.93)
+    legend.SetMargin(0.3)
+    legend.SetBorderSize(0)
+    for item, name in zip(items, names) : #range(0, stack.GetStack().GetLast() + 1) :
+        legend.AddEntry( item, name, 'l')
+    return legend
+
+def decorate(cmsLumi) :
+    logo = ROOT.TText(.2, .88,"CMS Preliminary")
+    logo.SetTextSize(0.03)
+    logo.DrawTextNDC(.2, .89,"CMS Preliminary")
+    
+    lumi = ROOT.TText(.7,1.05,"X fb^{-1} (13 TeV)")
+    lumi.SetTextSize(0.03)
+    lumi.DrawTextNDC(.7,.96,"%.1f / fb (13 TeV)" % cmsLumi )
 
 #def fitArcTan( graph ) :
 #    xVals = array('d', [i for i in range(0, 161)])
@@ -184,21 +200,37 @@ if __name__ == '__main__' :
         effPlots[iso]['AllRuns'].SetMaximum(1.5)
         effPlots[iso]['AllRuns'].Draw()
         #finalRuns = ['ggH125', 'AllRuns', 'ICHEPRuns', 'DYJets']
-        finalRuns = ['AllRuns', 'ICHEPRuns', 'DYJets', 'DYJetsRealTau']
-        colors = [ROOT.kBlack, ROOT.kGray, ROOT.kBlue, ROOT.kRed, ROOT.kGreen+1, ROOT.kYellow-2]
+        #finalRuns = ['AllRuns', 'ICHEPRuns',]# 'DYJets', 'DYJetsRealTau']
+        finalRuns = ['AllRuns', 'DYJets', 'DYJetsRealTau']
+        #colors = [ROOT.kBlack, ROOT.kGray, ROOT.kBlue, ROOT.kRed, ROOT.kGreen+1, ROOT.kYellow-2]
+        colors = [ROOT.kBlack, ROOT.kRed, ROOT.kGreen+1, ROOT.kYellow-2]
         for i, run in enumerate(finalRuns) :
             print i, run
             effPlots[iso][run].SetLineColor( colors[i] )
             if run == 'AllRuns' : continue
             effPlots[iso][run].Draw('SAME')
         oldEff = getCBEffGraph( iso )
-        oldEff.SetLineColor(ROOT.kMagenta)
+        oldEff.SetLineColor(ROOT.kBlue)
         oldEff.Draw('SAME')
         #bestFit = fitArcTan( effPlots[iso]['AllRuns'] )
         #bestFit.SetLineColor(ROOT.kCyan)
         #bestFit.Draw('SAME')
-        c.BuildLegend()
+        legItems = [effPlots[iso]['AllRuns'],
+            #effPlots[iso]['ICHEPRuns'],
+            oldEff,#]
+            effPlots[iso]['DYJets'],
+            effPlots[iso]['DYJetsRealTau'],]
+        legNames = ['20/fb - Wisc.',
+            #'ICHEP - Wisc.',
+            'ICHEP - Tau POG',#]
+            'DYJets - All Taus',
+            'DYJets - Real Taus',]
+        leg = buildLegend( legItems, legNames )
+        leg.Draw()
+        decorate(20.0)
+        #c.BuildLegend()
         c.SaveAs('/afs/cern.ch/user/t/truggles/www/TAP/_Combined_FinalEff_%s.png' % iso)
+        c.SaveAs('/afs/cern.ch/user/t/truggles/www/TAP/_Combined_FinalEff_%s.pdf' % iso)
     
 
 

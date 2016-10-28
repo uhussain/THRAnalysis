@@ -9,8 +9,8 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.MessageLogger.cerr.FwkReport.reportEvery = cms.untracked.int32(5000)
 
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring($inputFileNames)
-)
+    fileNames = cms.untracked.vstring($inputFileNames))
+#"/store/mc/RunIISpring16MiniAODv2/DYJetsToLL_M-50_TuneCUETP8M1_13TeV-madgraphMLM-pythia8/MINIAODSIM/PUSpring16RAWAODSIM_reHLT_80X_mcRun2_asymptotic_v14_ext1-v1/20000/00071E92-6F55-E611-B68C-0025905A6066.root"))
 
 
 

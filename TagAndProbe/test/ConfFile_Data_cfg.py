@@ -9,7 +9,7 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.MessageLogger.cerr.FwkReport.reportEvery = cms.untracked.int32(5000)
 
 process.source = cms.Source("PoolSource",
-    fileNames = cms.untracked.vstring($inputFileNames)
+   fileNames = cms.untracked.vstring($inputFileNames)
 )
 
 

@@ -109,7 +109,7 @@ class TagAndProbeAnalyzer : public edm::one::EDAnalyzer<edm::one::SharedResource
       TH1D *cutFlow;
       double eventD;
       float run, lumi, nTruePU, nvtx, nvtxCleaned, IsoMu20, IsoMu22, IsoMu24,
-        IsoMu27, IsoMu21MediumIsoTau32, TrigPass, mPt, mEta, mPhi,
+        IsoMu27, IsoMu21MediumIsoTau32, IsoMu19MediumIsoTau32,IsoMu19MediumCombinedIsoTau32,IsoMu21MediumCombinedIsoTau32, IsoMu19LooseIsoTau20_SingleL1, IsoMu19LooseIsoTau20, IsoMu21LooseIsoTau20_SingleL1, IsoMu17LooseIsoTau20_SingleL1, IsoMu17LooseIsoTau20, TrigPass, mPt, mEta, mPhi,
         tPt, tEta, tPhi, tMVAIsoVLoose, tMVAIsoLoose, tMVAIsoMedium, 
         tMVAIsoTight, tMVAIsoVTight, m_vis, transMass, SS,
         leptonDR, mTrigMatch, tTrigMatch, mL1Match, tL1Match,
@@ -164,6 +164,14 @@ TagAndProbeAnalyzer::TagAndProbeAnalyzer(const edm::ParameterSet& iConfig) :
    tree->Branch("IsoMu24",&IsoMu24,"IsoMu24/F");
    tree->Branch("IsoMu27",&IsoMu27,"IsoMu27/F");
    tree->Branch("IsoMu21MediumIsoTau32",&IsoMu21MediumIsoTau32,"IsoMu21MediumIsoTau32/F");
+   tree->Branch("IsoMu19MediumIsoTau32",&IsoMu19MediumIsoTau32,"IsoMu19MediumIsoTau32/F");
+   tree->Branch("IsoMu19MediumCombinedIsoTau32",&IsoMu19MediumCombinedIsoTau32,"IsoMu19MediumCombinedIsoTau32/F");
+   tree->Branch("IsoMu21MediumCombinedIsoTau32",&IsoMu21MediumCombinedIsoTau32,"IsoMu21MediumCombinedIsoTau32/F");
+   tree->Branch("IsoMu19LooseIsoTau20_SingleL1", &IsoMu19LooseIsoTau20_SingleL1, "IsoMu19LooseIsoTau20_SingleL1/F");
+   tree->Branch("IsoMu19LooseIsoTau20", &IsoMu19LooseIsoTau20, "IsoMu19LooseIsoTau20/F");
+   tree->Branch("IsoMu21LooseIsoTau20_SingleL1", &IsoMu21LooseIsoTau20_SingleL1, "IsoMu21LooseIsoTau20_SingleL1/F");
+   tree->Branch("IsoMu17LooseIsoTau20_SingleL1", &IsoMu17LooseIsoTau20_SingleL1,"IsoMu17LooseIsoTau20_SingleL1/F");
+   tree->Branch("IsoMu17LooseIsoTau20", &IsoMu17LooseIsoTau20, "IsoMu17LooseIsoTau20/F");
    tree->Branch("TrigPass",&TrigPass,"TrigPass/F");
    tree->Branch("mPt",&mPt,"mPt/F");
    tree->Branch("mEta",&mEta,"mEta/F");
@@ -242,7 +250,7 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     int passingMuons = 0;
 
     for (const pat::Muon &mu : *muons) {
-        if (mu.pt() < 20 || fabs(mu.eta()) > 2.1 || !mu.isMediumMuon()) continue;
+        if (mu.pt() < 25 || fabs(mu.eta()) > 2.1 || !mu.isMediumMuon()) continue;
         float mIso = (mu.pfIsolationR04().sumChargedHadronPt
             + TMath::Max(0., mu.pfIsolationR04().sumNeutralHadronEt
             + mu.pfIsolationR04().sumPhotonEt
@@ -285,8 +293,8 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
     int passingTaus = 0;
     for (const pat::Tau &tau : *taus) {
         if (tau.pt() < 20 || fabs(tau.eta()) > 2.1 || tau.tauID("byVLooseIsolationMVArun2v1DBoldDMwLT") < 0.5
-            || tau.tauID("decayModeFinding") < 0.5 || tau.tauID("againstElectronLooseMVA6") < 0.5
-            || tau.tauID("againstMuonTight3") < 0.5) continue;
+            || tau.tauID("decayModeFinding") < 0.5 || tau.tauID("againstElectronTightMVA6") < 0.5
+            || tau.tauID("againstMuonTight3") < 0.5 || fabs(tau.charge())!=1) continue;
         // No extra lepton vetoes rely on tau number
         // so, if multiple taus, choose highest pt one.
         // Do trigger matching later
@@ -404,6 +412,31 @@ TagAndProbeAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iS
         }
         if (names.triggerName(i).find("HLT_IsoMu21_eta2p1_MediumIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) {
             if (triggerResults->accept(i)) IsoMu21MediumIsoTau32 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        //adding more filters for tauPOG
+	if (names.triggerName(i).find("HLT_IsoMu19_eta2p1_MediumIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu19MediumIsoTau32 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu19_eta2p1_LooseIsoPFTau20_SingleL1_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu19LooseIsoTau20_SingleL1 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu19_eta2p1_LooseIsoPFTau20_v") != std::string::npos) {
+            if (triggerResults->accept(i)) IsoMu19LooseIsoTau20 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu21_eta2p1_LooseIsoPFTau20_SingleL1_v") != std::string::npos) {
+            if (triggerResults->accept(i))  IsoMu21LooseIsoTau20_SingleL1 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu17_eta2p1_LooseIsoPFTau20_SingleL1_v") != std::string::npos) {
+            if (triggerResults->accept(i))  IsoMu17LooseIsoTau20_SingleL1 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu17_eta2p1_LooseIsoPFTau20_v") != std::string::npos) {
+            if (triggerResults->accept(i))  IsoMu17LooseIsoTau20 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu19_eta2p1_MediumCombinedIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) { 
+            if (triggerResults->accept(i))  IsoMu19MediumCombinedIsoTau32 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
+        }
+        if (names.triggerName(i).find("HLT_IsoMu21_eta2p1_MediumCombinedIsoPFTau32_Trk1_eta2p1_Reg_v") != std::string::npos) {
+            if (triggerResults->accept(i))  IsoMu21MediumCombinedIsoTau32 = 1; TrigPass = 1; usedPaths.push_back( names.triggerName(i) );
         }
     }
 
